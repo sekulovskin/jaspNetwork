@@ -54,11 +54,16 @@ BayesianNetworkAnalysis <- function(jaspResults, dataset, options) {
     mainContainer <- createJaspContainer(dependencies = c("variables", "groupingVariable",
                                          "variablesBlumeCapel",
                                                           "burnin", "iter", "seed", "gPrior",
-                                                          "edgePrior", "interactionScale",
+                                                          "edgePrior",
+                                                          "interactionPriorFamily", "interactionScale",
+                                                          "interactionAlpha", "interactionBeta",
+                                                          "interactionScaleBaseline",
                                                           "betaAlpha", "betaBeta",
                                                           "betaAlpha_between", "betaBeta_between",
                                                           "lambda", "dirichletAlpha",
+                                                          "thresholdPriorFamily",
                                                           "thresholdAlpha", "thresholdBeta",
+                                                          "thresholdScale",
                                                           "chains", "omrfUpdateMethod"))
     jaspResults[["mainContainer"]] <- mainContainer
   }
@@ -376,9 +381,95 @@ BayesianNetworkAnalysis <- function(jaspResults, dataset, options) {
   return(callback)
 }
 
+.bayesianNetworkAnalysisBuildParameterPrior <- function(family, scale, alpha, beta, priorRole) {
+
+  family <- .bayesianNetworkAnalysisNormalizePriorFamily(family, default = if (priorRole == "interaction") "cauchy" else "beta-prime")
+
+  switch(family,
+    "cauchy"     = bgms::cauchy_prior(scale = scale),
+    "normal"     = bgms::normal_prior(scale = scale),
+    "beta-prime" = bgms::beta_prime_prior(alpha = alpha, beta = beta),
+    .quitAnalysis(gettextf("Unsupported prior family '%s'.", family))
+  )
+}
+
+.bayesianNetworkAnalysisNormalizePriorFamily <- function(value, default) {
+
+  if (is.null(value) || length(value) == 0L)
+    return(default)
+
+  token <- trimws(strsplit(as.character(value)[1L], ",", fixed = TRUE)[[1L]][1L])
+  if (is.na(token) || token %in% c("", "NA", "NULL"))
+    return(default)
+
+  tolower(gsub("[[:space:]_]+", "-", token))
+}
+
+.bayesianNetworkAnalysisBuildEdgePrior <- function(options) {
+
+  switch(options[["edgePrior"]],
+    "Bernoulli" = bgms::bernoulli_prior(
+      inclusion_probability = options[["gPrior"]]
+    ),
+    "Beta-Bernoulli" = bgms::beta_bernoulli_prior(
+      alpha = options[["betaAlpha"]],
+      beta  = options[["betaBeta"]]
+    ),
+    "Stochastic-Block" = bgms::sbm_prior(
+      alpha           = options[["betaAlpha"]],
+      beta            = options[["betaBeta"]],
+      alpha_between   = options[["betaAlpha_between"]],
+      beta_between    = options[["betaBeta_between"]],
+      dirichlet_alpha = options[["dirichletAlpha"]],
+      lambda          = options[["lambda"]]
+    ),
+    .quitAnalysis(gettextf("Unsupported edge prior '%s'.", options[["edgePrior"]]))
+  )
+}
+
+.bayesianNetworkAnalysisBuildDifferencePrior <- function(options) {
+
+  switch(options[["edgePrior"]],
+    "Bernoulli" = bgms::bernoulli_prior(
+      inclusion_probability = options[["gPrior"]]
+    ),
+    "Beta-Bernoulli" = bgms::beta_bernoulli_prior(
+      alpha = options[["betaAlpha"]],
+      beta  = options[["betaBeta"]]
+    ),
+    .quitAnalysis(gettextf("Unsupported difference prior '%s'.", options[["edgePrior"]]))
+  )
+}
+
+.bayesianNetworkAnalysisBuildInteractionPrior <- function(options) {
+
+  .bayesianNetworkAnalysisBuildParameterPrior(
+    family    = options[["interactionPriorFamily"]],
+    scale     = options[["interactionScale"]],
+    alpha     = options[["interactionAlpha"]],
+    beta      = options[["interactionBeta"]],
+    priorRole = "interaction"
+  )
+}
+
+.bayesianNetworkAnalysisBuildThresholdPrior <- function(options) {
+
+  .bayesianNetworkAnalysisBuildParameterPrior(
+    family    = options[["thresholdPriorFamily"]],
+    scale     = options[["thresholdScale"]],
+    alpha     = options[["thresholdAlpha"]],
+    beta      = options[["thresholdBeta"]],
+    priorRole = "threshold"
+  )
+}
+
 .bayesianNetworkAnalysisFitSingleNetwork <- function(data, variableSpec, options, progressLabel = "") {
 
   updateMethod <- .bayesianNetworkAnalysisNormalizeUpdateMethod(options[["omrfUpdateMethod"]])
+
+  interactionPrior <- .bayesianNetworkAnalysisBuildInteractionPrior(options)
+  thresholdPrior   <- .bayesianNetworkAnalysisBuildThresholdPrior(options)
+  edgePrior        <- .bayesianNetworkAnalysisBuildEdgePrior(options)
 
   jaspBase::.setSeedJASP(options)
   easybgmFit <- try(easybgm::easybgm(
@@ -394,17 +485,9 @@ BayesianNetworkAnalysis <- function(jaspResults, dataset, options) {
     warmup                       = options[["burnin"]],
     chains                       = as.integer(options[["chains"]]),
     update_method                = updateMethod,
-    inclusion_probability        = options[["gPrior"]],
-    pairwise_scale               = options[["interactionScale"]],
-    edge_prior                   = options[["edgePrior"]],
-    main_alpha                   = options[["thresholdAlpha"]],
-    main_beta                    = options[["thresholdBeta"]],
-    beta_bernoulli_alpha         = options[["betaAlpha"]],
-    beta_bernoulli_beta          = options[["betaBeta"]],
-    beta_bernoulli_alpha_between = options[["betaAlpha_between"]],
-    beta_bernoulli_beta_between  = options[["betaBeta_between"]],
-    lambda                       = options[["lambda"]],
-    dirichlet_alpha              = options[["dirichletAlpha"]],
+    interaction_prior            = interactionPrior,
+    threshold_prior              = thresholdPrior,
+    edge_prior                   = edgePrior,
     progress_callback            = .bayesianNetworkAnalysisMakeProgressCallback(progressLabel)
   ))
 
@@ -541,6 +624,18 @@ BayesianNetworkAnalysis <- function(jaspResults, dataset, options) {
     updateMethod <- .bayesianNetworkAnalysisNormalizeUpdateMethod(options[["omrfUpdateMethod"]])
     groupIndicator <- rep(seq_len(nGroups), times = vapply(groupData, nrow, integer(1L)))
 
+    # In compare mode, interactionScale is the Cauchy scale on the *differences*;
+    # interactionScaleBaseline (when supplied) drives the *baseline* pairwise prior.
+    baselineOptions <- options
+    baselineScale <- options[["interactionScaleBaseline"]]
+    if (is.null(baselineScale) || !is.finite(baselineScale) || baselineScale <= 0)
+      baselineScale <- options[["interactionScale"]]
+    baselineOptions[["interactionScale"]] <- baselineScale
+
+    interactionPriorBaseline <- .bayesianNetworkAnalysisBuildInteractionPrior(baselineOptions)
+    thresholdPrior           <- .bayesianNetworkAnalysisBuildThresholdPrior(options)
+    differencePrior          <- .bayesianNetworkAnalysisBuildDifferencePrior(options)
+
     jaspBase::.setSeedJASP(options)
     compareFit <- try(easybgm::easybgm_compare(
       data    = pooledData,
@@ -555,13 +650,10 @@ BayesianNetworkAnalysis <- function(jaspResults, dataset, options) {
       warmup                      = options[["burnin"]],
       chains                      = as.integer(options[["chains"]]),
       update_method               = updateMethod,
-      difference_probability      = options[["gPrior"]],
+      interaction_prior           = interactionPriorBaseline,
+      threshold_prior             = thresholdPrior,
+      difference_prior            = differencePrior,
       difference_scale            = options[["interactionScale"]],
-      difference_prior            = options[["edgePrior"]],
-      main_alpha                  = options[["thresholdAlpha"]],
-      main_beta                   = options[["thresholdBeta"]],
-      beta_bernoulli_alpha        = options[["betaAlpha"]],
-      beta_bernoulli_beta         = options[["betaBeta"]],
       progress_callback           = .bayesianNetworkAnalysisMakeProgressCallback(gettext("Estimating group comparison"))
     ))
 

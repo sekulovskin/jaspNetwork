@@ -338,7 +338,7 @@ VariablesForm
 					   name: "betaAlpha"
 					   label: edgePrior.currentValue === "Beta-Bernoulli" ? qsTr("Shape parameter 1:") : qsTr("Within cluster shape parameter 1:")
 					   info: qsTr("First shape parameter (\u03b11) of the Beta prior on the within-cluster edge inclusion probability. Together with shape parameter 2, controls the prior mean (\u03b11 / (\u03b11 + \u03b12)) and concentration. Equal values of 1 correspond to a uniform prior within each cluster.")
-					   value: 1
+					   defaultValue: 1
 					   min: 0
 					   inclusive: JASP.None
 					   preferredWidth: 300
@@ -350,7 +350,7 @@ VariablesForm
 					   name: "betaBeta"
 					   label: edgePrior.currentValue === "Beta-Bernoulli" ? qsTr("Shape parameter 2:") : qsTr("Within cluster shape parameter 2:")
 					   info: qsTr("Second shape parameter (\u03b12) of the Beta prior on the within-cluster edge inclusion probability. Equal values of 1 correspond to a uniform prior.")
-					   value: 1
+					   defaultValue: 1
 					   min: 0
 					   inclusive: JASP.None
 					   preferredWidth: 300
@@ -361,7 +361,7 @@ VariablesForm
 					name: "betaAlpha_between"
 					label: qsTr("Between cluster shape parameter 1:")
 					info: qsTr("First shape parameter (\u03b11) of the Beta prior on the between-cluster edge inclusion probability. To encourage sparsity between clusters (block structure), set both between-cluster parameters to values less than 1.")
-					value: 1
+					defaultValue: 1
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
@@ -373,7 +373,7 @@ VariablesForm
 					name: "betaBeta_between"
 					label: qsTr("Between cluster shape parameter 2:")
 					info: qsTr("Second shape parameter (\u03b12) of the Beta prior on the between-cluster edge inclusion probability.")
-					value: 1
+					defaultValue: 1
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
@@ -385,7 +385,7 @@ VariablesForm
 					name: "lambda"
 					label: qsTr("Parameter for the number of clusters:")
 					info: qsTr("Rate parameter of the truncated Poisson prior on the number of clusters. Smaller values favor fewer clusters.")
-					value: 1
+					defaultValue: 1
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
@@ -397,7 +397,7 @@ VariablesForm
 					name: "dirichletAlpha"
 					label: qsTr("Concentration parameter:")
 					info: qsTr("Symmetric Dirichlet concentration parameter for cluster membership probabilities. The default of 1 is roughly uninformative about cluster sizes. Values less than 1 favor unequal cluster sizes.")
-					value: 1
+					defaultValue: 1
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
@@ -415,37 +415,127 @@ VariablesForm
 			Column
 			{
 				spacing: 10
+
+				DropDown
+				{
+					id: interactionPriorFamily
+					name: "interactionPriorFamily"
+					label: groupingVariableSelector.count > 0 ?
+						qsTr("Prior family for the partial association differences:") :
+						qsTr("Prior family for the partial association parameters:")
+					info: qsTr("Family of the prior on the partial association parameters. Cauchy is the default heavy-tailed shrinkage prior. Normal applies lighter-tailed shrinkage. Beta-prime is parameterized via two shape parameters on the logistic scale.")
+					preferredWidth: 300
+					values: [
+						{ value: "cauchy",     label: qsTr("Cauchy")      },
+						{ value: "normal",     label: qsTr("Normal")      },
+						{ value: "beta-prime", label: qsTr("Beta-prime")  }
+					]
+				}
+
 				DoubleField
 				{
 					name: "interactionScale"
-					label: qsTr("Scale of the Cauchy distribution for the partial association parameters:")
-					info: qsTr("Scale parameter of the Cauchy prior on the partial association parameters.")
-					value: 1
+					label: groupingVariableSelector.count > 0 ?
+						(interactionPriorFamily.currentValue === "normal" ?
+							qsTr("Scale of the Normal distribution for the differences:") :
+							qsTr("Scale of the Cauchy distribution for the differences:")) :
+						(interactionPriorFamily.currentValue === "normal" ?
+							qsTr("Scale of the Normal distribution for the partial association parameters:") :
+							qsTr("Scale of the Cauchy distribution for the partial association parameters:"))
+					info: qsTr("Scale parameter of the Cauchy or Normal prior on the partial association parameters. When a grouping variable is selected, this scale applies to the differences between groups.")
+					defaultValue: 1
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
+					visible: interactionPriorFamily.currentValue === "cauchy" || interactionPriorFamily.currentValue === "normal"
+				}
+
+				DoubleField
+				{
+					name: "interactionAlpha"
+					label: qsTr("Shape parameter 1 for the partial associations:")
+					info: qsTr("First shape parameter (\u03b11) of the Beta-prime prior on the partial association parameters.")
+					defaultValue: 0.5
+					min: 0
+					inclusive: JASP.None
+					preferredWidth: 300
+					visible: interactionPriorFamily.currentValue === "beta-prime"
+				}
+
+				DoubleField
+				{
+					name: "interactionBeta"
+					label: qsTr("Shape parameter 2 for the partial associations:")
+					info: qsTr("Second shape parameter (\u03b12) of the Beta-prime prior on the partial association parameters.")
+					defaultValue: 0.5
+					min: 0
+					inclusive: JASP.None
+					preferredWidth: 300
+					visible: interactionPriorFamily.currentValue === "beta-prime"
+				}
+
+				DoubleField
+				{
+					name: "interactionScaleBaseline"
+					label: qsTr("Baseline Cauchy scale for the partial association parameters:")
+					info: qsTr("Scale of the Cauchy prior on the *baseline* partial association parameters when comparing groups. Set to a positive value to override the default of 1; values \u2264 0 fall back to the differences scale.")
+					defaultValue: 1
+					min: 0
+					inclusive: JASP.None
+					preferredWidth: 300
+					visible: groupingVariableSelector.count > 0
+				}
+
+				DropDown
+				{
+					id: thresholdPriorFamily
+					name: "thresholdPriorFamily"
+					label: qsTr("Prior family for the main effects:")
+					info: qsTr("Family of the prior on the main effects (thresholds). Beta-prime is the default; Cauchy and Normal are alternative parameterizations on the original scale.")
+					preferredWidth: 300
+					values: [
+						{ value: "beta-prime", label: qsTr("Beta-prime") },
+						{ value: "cauchy",     label: qsTr("Cauchy")     },
+						{ value: "normal",     label: qsTr("Normal")     }
+					]
 				}
 
 				DoubleField
 				{
 					name: "thresholdAlpha"
-					label: qsTr("Shape parameter 1 for the main effects")
-					info: qsTr("First shape parameter (\u03b11) of the Beta prior on the main effects.")
-					value: 0.5
+					label: qsTr("Shape parameter 1 for the main effects:")
+					info: qsTr("First shape parameter (\u03b11) of the Beta-prime prior on the main effects.")
+					defaultValue: 0.5
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
+					visible: thresholdPriorFamily.currentValue === "beta-prime"
 				}
 
 				DoubleField
 				{
 					name: "thresholdBeta"
 					label: qsTr("Shape parameter 2 for the main effects:")
-					info: qsTr("Second shape parameter (\u03b12) of the Beta prior on the main effects.")
-					value: 0.5
+					info: qsTr("Second shape parameter (\u03b12) of the Beta-prime prior on the main effects.")
+					defaultValue: 0.5
 					min: 0
 					inclusive: JASP.None
 					preferredWidth: 300
+					visible: thresholdPriorFamily.currentValue === "beta-prime"
+				}
+
+				DoubleField
+				{
+					name: "thresholdScale"
+					label: thresholdPriorFamily.currentValue === "normal" ?
+						qsTr("Scale of the Normal distribution for the main effects:") :
+						qsTr("Scale of the Cauchy distribution for the main effects:")
+					info: qsTr("Scale parameter of the Cauchy or Normal prior on the main effects.")
+					defaultValue: 1
+					min: 0
+					inclusive: JASP.None
+					preferredWidth: 300
+					visible: thresholdPriorFamily.currentValue === "cauchy" || thresholdPriorFamily.currentValue === "normal"
 				}
 			}
 		}
