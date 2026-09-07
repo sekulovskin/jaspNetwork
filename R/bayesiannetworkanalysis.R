@@ -754,12 +754,17 @@ BayesianNetworkAnalysis <- function(jaspResults, dataset, options) {
     differenceFamily         <- .bayesianNetworkAnalysisBuildDifferenceFamily(options)
 
     jaspBase::.setSeedJASP(options)
+    # 'package' is deliberately left unset. easybgm_compare overrides an
+    # explicit package = "bgms" to BGGM whenever 'type' is a per-variable
+    # vector, and then refuses the fit because BGGM takes only a single
+    # continuous/mixed type. With no package given it resolves a vector type to
+    # bgms directly, which is what the ordinal/Blume-Capel types reaching here
+    # need.
     compareFit <- try(easybgm::easybgm_compare(
       data    = pooledData,
       group_indicator             = groupIndicator,
       type    = pooledVariableSpec[["type"]],
       baseline_category           = pooledVariableSpec[["baselineCategory"]],
-      package = "bgms",
       iter                        = options[["iter"]],
       seed                        = options[["seed"]],
       save                        = TRUE,

@@ -990,10 +990,10 @@
       ],
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteUsername": "Bayesian-Graphical-Modelling-Lab",
+      "RemoteUsername": "KarolineHuth",
       "RemoteRepo": "easybgm",
-      "RemoteRef": "9cb55d9263ebbb75a55231cfca44f39decf30657",
-      "RemoteSha": "9cb55d9263ebbb75a55231cfca44f39decf30657"
+      "RemoteRef": "2bec609ed78c25cb0f73016c557a2b3216565611",
+      "RemoteSha": "2bec609ed78c25cb0f73016c557a2b3216565611"
     },
     "eigenmodel": {
       "Package": "eigenmodel",
